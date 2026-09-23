@@ -3,12 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Observable, map } from 'rxjs';
 import { Repository } from 'typeorm';
 import { OrderStageEvent } from './order-stage-event.entity';
+import { ORDER_ID_PATTERN } from './stage-events.constants';
 import { StageEventsService } from './stage-events.service';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function assertOrderId(id: string): void {
-  if (!UUID.test(id)) {
+  if (!ORDER_ID_PATTERN.test(id)) {
     throw new BadRequestException('order id must be a uuid');
   }
 }

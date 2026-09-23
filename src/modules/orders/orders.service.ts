@@ -4,12 +4,9 @@ import { DataSource, Repository } from 'typeorm';
 import { OrderStatus } from '../../shared/pipeline';
 import { Order } from './order.entity';
 import { enqueueOutbox } from '../outbox/enqueue-outbox';
-import { CreateOrderBody, parseCreateOrder } from './create-order.input';
-
-/** The first attempt of a stage is 1, not 0 — `attempt` is a human-facing column. */
-const FIRST_ATTEMPT = 1;
-const DEFAULT_LIST_LIMIT = 50;
-const MAX_LIST_LIMIT = 200;
+import { parseCreateOrder } from './create-order.input';
+import { DEFAULT_LIST_LIMIT, FIRST_ATTEMPT, MAX_LIST_LIMIT } from './orders.constants';
+import { CreatedOrder, CreateOrderBody } from './orders.types';
 
 @Injectable()
 export class OrdersService {
@@ -23,7 +20,7 @@ export class OrdersService {
    * immediately. Nothing downstream has happened yet at this point — that is the
    * request, not a shortcoming of it.
    */
-  async create(body: CreateOrderBody) {
+  async create(body: CreateOrderBody): Promise<CreatedOrder> {
     const { customerName, amount } = parseCreateOrder(body);
 
     return this.dataSource.transaction(async (manager) => {

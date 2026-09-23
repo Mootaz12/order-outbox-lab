@@ -1,10 +1,7 @@
 import { STAGES, StageName } from '../../shared/pipeline';
-import {
-  simulatedDelayMs,
-  simulatedFailure,
-  STAGE_CONFIGS,
-  stageHandlerName,
-} from './stage-config';
+import { stageHandlerName } from './stage-handler';
+import { simulatedDelayMs, simulatedFailure } from './stage-simulation';
+import { STAGE_CONFIGS } from './stages.constants';
 
 describe('stage config table', () => {
   it('keeps each stage under its own key', () => {

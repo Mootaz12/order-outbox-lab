@@ -1,14 +1,9 @@
-export const MAX_RETRIES = 3;
-
-/** What to do once a failure has been recorded for this (order, stage). */
-export enum RetryDecision {
-  Retry = 'retry',
-  DeadLetter = 'dead_letter',
-}
+import { BACKOFF_STEP_MS, MAX_RETRIES } from './stages.constants';
+import { RetryDecision } from './stages.types';
 
 /** Grows with each attempt so a struggling dependency gets breathing room. */
 export function backoffMs(attempt: number): number {
-  return attempt * 1000;
+  return attempt * BACKOFF_STEP_MS;
 }
 
 /**

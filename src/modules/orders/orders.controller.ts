@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { CreateOrderBody } from './create-order.input';
+import { CreateOrderBody } from './orders.types';
 
 @Controller('orders')
 export class OrdersController {

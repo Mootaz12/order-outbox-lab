@@ -1,5 +1,7 @@
 import { STAGES, stageEvent } from '../../shared/pipeline';
-import { backoffMs, MAX_RETRIES, nextActionAfterFailure, RetryDecision } from './retry-policy';
+import { backoffMs, nextActionAfterFailure } from './retry-policy';
+import { MAX_RETRIES } from './stages.constants';
+import { RetryDecision } from './stages.types';
 
 describe('retry policy', () => {
   it('retries up to the limit, then dead-letters', () => {

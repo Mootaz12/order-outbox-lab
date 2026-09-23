@@ -4,10 +4,9 @@ import { Interval } from '@nestjs/schedule';
 import { DataSource, In } from 'typeorm';
 import { appConfig, AppConfig } from '../../config';
 import { OrderEvent, stageEvent } from '../../shared/pipeline';
+import { OUTBOX_BATCH_SIZE, OUTBOX_POLL_INTERVAL_MS } from './outbox.constants';
 import { Outbox } from './outbox.entity';
 
-const BATCH_SIZE = 50;
-const POLL_INTERVAL_MS = 2000;
 
 /**
  * Competing consumers. Every instance runs this on its own interval; `FOR UPDATE
@@ -32,7 +31,7 @@ export class OutboxRelayService {
     this.instanceId = app.instanceId;
   }
 
-  @Interval(POLL_INTERVAL_MS)
+  @Interval(OUTBOX_POLL_INTERVAL_MS)
   async poll(): Promise<void> {
     if (this.running) return;
     this.running = true;
@@ -56,7 +55,7 @@ export class OutboxRelayService {
         .andWhere('outbox.available_at <= now()')
         .orderBy('outbox.created_at', 'ASC')
         .addOrderBy('outbox.id', 'ASC')
-        .limit(BATCH_SIZE)
+        .limit(OUTBOX_BATCH_SIZE)
         .setLock('pessimistic_write')
         .setOnLocked('skip_locked')
         .getMany();

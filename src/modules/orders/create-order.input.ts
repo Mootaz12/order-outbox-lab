@@ -1,16 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-
-/** The raw POST /orders body — untrusted, so every field is `unknown`. */
-export interface CreateOrderBody {
-  customerName?: unknown;
-  amount?: unknown;
-}
-
-export interface CreateOrderInput {
-  customerName: string;
-  /** Already rounded to two decimals, ready for the `numeric` column. */
-  amount: string;
-}
+import { CreateOrderBody, CreateOrderInput } from './orders.types';
 
 /** Validates the body by hand; throws BadRequestException (400) on the first bad field. */
 export function parseCreateOrder(input: CreateOrderBody): CreateOrderInput {

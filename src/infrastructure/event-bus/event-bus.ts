@@ -1,4 +1,4 @@
-export type EventHandler<T> = (payload: T) => void;
+import { EventHandler } from './event-bus.types';
 
 /**
  * Cross-instance publish/subscribe: every subscriber on every instance receives every

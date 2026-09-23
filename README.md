@@ -129,7 +129,7 @@ payment, inventory and email run there. That's deliberate: work spreads across i
 without each one doing the whole job. Stages have randomized delays (payment 700–1500ms,
 inventory 900–2000ms, email 400–1000ms) and different failure rates (10%, 15%, 5%), which
 is what makes interleaving and retries observable. Those numbers live in one table,
-`STAGE_CONFIGS` in `src/modules/stages/stage-config.ts`.
+`STAGE_CONFIGS` in `src/modules/stages/stages.constants.ts`.
 
 **Durable retries.** A failing stage does three things in one transaction: appends its
 `failed` row, upserts `stage_retries`, and enqueues a *new outbox row tagged with its own
@@ -276,7 +276,9 @@ public/js/                   the dashboard, plain ES modules, no bundler
 tools/load-generator/        HTTP-only traffic generator (pnpm load)
 ```
 
-Each feature folder owns its entity, and entities are discovered by the `*.entity.ts` glob in
+Each feature folder owns its entity, and keeps its constants in `<feature>.constants.ts` and
+its types (interfaces, enums, SQL row shapes) in `<feature>.types.ts` — services, controllers
+and entities import them rather than declaring them. Entities are discovered by the `*.entity.ts` glob in
 `src/infrastructure/database/database-options.ts`, which both the app and the migrator use — a
 new entity needs the file suffix and a migration, nothing registered by hand.
 
@@ -310,7 +312,7 @@ A few rules hold this together:
   that caused it. `StageRunner.record()` is the only write into the audit log — claim, complete
   and fail all go through it, so the `ON CONFLICT DO NOTHING` idempotency rule exists in exactly
   one place.
-- **One frame shape.** `StageEventFrame` (`modules/stage-events/stage-event-frame.ts`) is both
+- **One frame shape.** `StageEventFrame` (`modules/stage-events/stage-events.types.ts`) is both
   the event-bus payload and the SSE `data`.
 
 **Adding a stage** is an entry in `StageName` and `STAGES` (`src/shared/pipeline.ts`) plus a

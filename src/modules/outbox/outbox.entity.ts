@@ -9,12 +9,7 @@ import {
 } from 'typeorm';
 import { StageName } from '../../shared/pipeline';
 import { Order } from '../orders/order.entity';
-
-export interface OutboxPayload {
-  orderId: string;
-  stage: StageName | null;
-  attempt: number;
-}
+import { OutboxPayload } from './outbox.types';
 
 /**
  * The transactional outbox. `stage = NULL` means "fan this order out to all three

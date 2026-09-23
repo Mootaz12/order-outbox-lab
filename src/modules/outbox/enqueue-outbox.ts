@@ -1,15 +1,6 @@
 import { EntityManager } from 'typeorm';
-import { StageName } from '../../shared/pipeline';
 import { Outbox } from './outbox.entity';
-
-export interface OutboxEntry {
-  orderId: string;
-  /** `null` fans the order out to every stage; a stage name retries only that stage. */
-  stage: StageName | null;
-  attempt: number;
-  /** Omitted means "deliverable now" (the column defaults to `now()`). */
-  availableAt?: Date;
-}
+import { OutboxEntry } from './outbox.types';
 
 /**
  * The single write path into `outbox`. It takes the caller's EntityManager rather

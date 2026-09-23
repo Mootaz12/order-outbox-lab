@@ -2,11 +2,17 @@ import { Inject, Injectable, Type } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { DataSource } from 'typeorm';
 import { appConfig, AppConfig } from '../../config';
-import { OrderEvent, STAGES, stageEvent } from '../../shared/pipeline';
-import { OutboxPayload } from '../outbox/outbox.entity';
+import { OrderEvent, StageName, STAGES, stageEvent } from '../../shared/pipeline';
+import { OutboxPayload } from '../outbox/outbox.types';
 import { StageEventsService } from '../stage-events/stage-events.service';
-import { STAGE_CONFIGS, StageConfig, stageHandlerName } from './stage-config';
 import { StageRunner } from './stage-runner';
+import { STAGE_CONFIGS } from './stages.constants';
+import { StageConfig } from './stages.types';
+
+/** `payment` → `PaymentService`: the logger context each stage has always logged under. */
+export function stageHandlerName(stage: StageName): string {
+  return `${stage.charAt(0).toUpperCase()}${stage.slice(1)}Service`;
+}
 
 /**
  * Builds one provider class per stage. It has to be a distinct class, not one class

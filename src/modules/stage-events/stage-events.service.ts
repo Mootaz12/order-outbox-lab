@@ -2,9 +2,7 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Observable, Subject, filter } from 'rxjs';
 import { EventBus } from '../../infrastructure/event-bus/event-bus';
 import { EventChannel, StageStatus } from '../../shared/pipeline';
-import { StageEventFrame } from './stage-event-frame';
-
-export type { StageEventFrame } from './stage-event-frame';
+import { StageEventFrame } from './stage-events.types';
 
 /**
  * Every stage-event row is published to the event bus, and every instance feeds its

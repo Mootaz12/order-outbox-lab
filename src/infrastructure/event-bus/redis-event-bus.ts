@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import { eventBusConfig, EventBusConfig } from '../../config';
-import { EventBus, EventHandler } from './event-bus';
+import { EventBus } from './event-bus';
+import { DEFAULT_PING_DEADLINE_MS } from './event-bus.constants';
+import { EventHandler } from './event-bus.types';
 
 /**
  * Redis pub/sub driver. Two connections, as Redis pub/sub requires: one that may issue
@@ -41,7 +43,7 @@ export class RedisEventBus extends EventBus implements OnModuleDestroy {
    * rather than rejected — which is right for publishing but would let a health probe
    * hang forever, so the caller gets a deadline.
    */
-  async ping(deadlineMs = 1500): Promise<void> {
+  async ping(deadlineMs = DEFAULT_PING_DEADLINE_MS): Promise<void> {
     await Promise.race([
       this.publisher.ping(),
       new Promise<never>((_, reject) =>

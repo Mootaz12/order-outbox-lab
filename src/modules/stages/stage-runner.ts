@@ -5,8 +5,9 @@ import { StageRetryStatus, StageStatus } from '../../shared/pipeline';
 import { enqueueOutbox } from '../outbox/enqueue-outbox';
 import { StageRetry } from './stage-retry.entity';
 import { StageEventsService } from '../stage-events/stage-events.service';
-import { backoffMs, nextActionAfterFailure, RetryDecision } from './retry-policy';
-import { simulatedDelayMs, simulatedFailure, StageConfig } from './stage-config';
+import { backoffMs, nextActionAfterFailure } from './retry-policy';
+import { simulatedDelayMs, simulatedFailure } from './stage-simulation';
+import { InsertedIdRow, RetryCounterRow, RetryDecision, StageConfig } from './stages.types';
 
 /**
  * The shape every stage shares: claim the attempt, do the work, record the outcome,
@@ -98,7 +99,7 @@ export abstract class StageRunner {
     const decision = await this.dataSource.transaction(async (manager) => {
       await this.record(orderId, attempt, StageStatus.Failed, error, manager);
 
-      const [counter] = await manager.query<Array<{ retry_count: string }>>(
+      const [counter] = await manager.query<RetryCounterRow[]>(
         `INSERT INTO stage_retries (order_id, stage, retry_count, status, last_error)
          VALUES ($1, $2, 1, $4, $3)
          ON CONFLICT (order_id, stage)
@@ -147,7 +148,7 @@ export abstract class StageRunner {
     detail: string | null,
     manager: EntityManager = this.dataSource.manager,
   ): Promise<boolean> {
-    const inserted = await manager.query<Array<{ id: string }>>(
+    const inserted = await manager.query<InsertedIdRow[]>(
       `INSERT INTO order_stage_events (order_id, stage, status, attempt, detail)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING

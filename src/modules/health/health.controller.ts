@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus';
 import { EventBusHealthIndicator } from './event-bus.health';
+import { HEALTH_PING_TIMEOUT_MS, HealthKey } from './health.constants';
 
 @Controller('health')
 export class HealthController {
@@ -18,8 +19,8 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.db.pingCheck('postgres', { timeout: 1500 }),
-      () => this.eventBus.isHealthy('eventBus'),
+      () => this.db.pingCheck(HealthKey.Postgres, { timeout: HEALTH_PING_TIMEOUT_MS }),
+      () => this.eventBus.isHealthy(HealthKey.EventBus),
     ]);
   }
 }
