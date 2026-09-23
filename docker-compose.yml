@@ -1,0 +1,101 @@
+name: order-outbox-lab
+
+x-app: &app
+  image: order-outbox-lab:dev
+  build: .
+  environment: &app-env
+    DATABASE_URL: postgres://app:app@db:5432/orders
+    REDIS_URL: redis://redis:6379
+  # Without this a host reboot leaves the whole stack down with the data volume
+  # intact, which reads as "the pipeline silently stopped working".
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    migrator:
+      condition: service_completed_successfully
+  healthcheck:
+    # 127.0.0.1, not localhost: the server binds IPv4 and busybox wget resolves
+    # localhost to ::1 first, which reads as a refused connection.
+    test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/health || exit 1"]
+    interval: 5s
+    # Both checks get 1.5s each, so this has to clear 3s of worst case.
+    timeout: 5s
+    retries: 5
+    start_period: 15s
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # One-shot: applies migrations and exits. The app instances gate on this finishing,
+  # which is why none of them needs to own schema creation at boot.
+  migrator:
+    image: order-outbox-lab:dev
+    build: .
+    command: ["node", "dist/database/migrate.js"]
+    environment:
+      <<: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app1:
+    <<: *app
+    environment:
+      <<: *app-env
+      INSTANCE_ID: instance-1
+
+  app2:
+    <<: *app
+    environment:
+      <<: *app-env
+      INSTANCE_ID: instance-2
+
+  app3:
+    <<: *app
+    environment:
+      <<: *app-env
+      INSTANCE_ID: instance-3
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app1:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+      app3:
+        condition: service_healthy
+
+volumes:
+  pgdata:

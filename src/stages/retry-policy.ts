@@ -1,0 +1,21 @@
+export const MAX_RETRIES = 3;
+
+/** What to do once a failure has been recorded for this (order, stage). */
+export enum RetryDecision {
+  Retry = 'retry',
+  DeadLetter = 'dead_letter',
+}
+
+/** Grows with each attempt so a struggling dependency gets breathing room. */
+export function backoffMs(attempt: number): number {
+  return attempt * 1000;
+}
+
+/**
+ * `retryCount` is the number of failures recorded for this (order, stage) *including*
+ * the one just observed. At MAX_RETRIES we stop enqueueing and dead-letter instead,
+ * so a stage makes at most MAX_RETRIES attempts in total.
+ */
+export function nextActionAfterFailure(retryCount: number): RetryDecision {
+  return retryCount >= MAX_RETRIES ? RetryDecision.DeadLetter : RetryDecision.Retry;
+}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>order-outbox-lab</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #14171c; color: #dfe3ea;
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p.hint { margin: 0 0 20px; color: #8b94a3; font-size: 12px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+  .panel { background: #1b1f26; border: 1px solid #2a3039; border-radius: 8px; padding: 14px; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #8b94a3; margin: 0 0 10px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  #orders li { padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  #orders li:hover { background: #232932; }
+  #orders li.active { background: #2b3542; }
+  #orders li span.id { color: #8b94a3; }
+  #orders li span.name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .none { color: #8b94a3; }
+  .badge { padding: 0 6px; border-radius: 4px; font-size: 12px; }
+  .pending   { background: #3a3f22; color: #d8e08a; }
+  .fulfilled { background: #1f3d2b; color: #79e0a4; }
+  .failed    { background: #45242a; color: #f09aa6; }
+  .started   { background: #22333f; color: #8ecdf0; }
+  .completed { background: #1f3d2b; color: #79e0a4; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #2a3039; font-weight: normal; }
+  th { color: #8b94a3; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  #selected { color: #8b94a3; word-break: break-all; }
+  #empty { color: #8b94a3; }
+  #dead li { padding: 4px 0; color: #f09aa6; }
+  #notice { margin: 0 0 16px; color: #f09aa6; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>order-outbox-lab</h1>
+  <p class="hint">
+    Rows below come from <code>order_stage_events</code>. Hydration is a plain REST read;
+    updates after that arrive over SSE, which reaches you regardless of which instance
+    claimed the order.
+  </p>
+  <p id="notice" hidden></p>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <h2>Orders</h2>
+        <ul id="orders"></ul>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h2>Dead letters</h2>
+        <ul id="dead"><li class="none">none</li></ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Stages — <span id="selected">pick an order</span></h2>
+      <p id="empty">Nothing selected.</p>
+      <table id="timeline" hidden>
+        <thead>
+          <tr><th>stage</th><th>attempt</th><th>status</th><th>detail</th><th>at (UTC)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+<script src="/vendor/dayjs.min.js"></script>
+<script src="/vendor/dayjs-utc.js"></script>
+<script src="/vendor/dayjs-localizedFormat.js"></script>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

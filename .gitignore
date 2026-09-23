@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Copied out of node_modules by `npm run vendor` during the build.
+public/vendor/
+
+# Local-only: session notes and Claude Code guidance.
+.remember/
+CLAUDE.md
