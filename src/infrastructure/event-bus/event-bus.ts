@@ -12,6 +12,7 @@ export abstract class EventBus {
   /** Serialization is the driver's job; payloads go in and come out as values. */
   abstract publish<T>(channel: string, payload: T): Promise<void>;
 
+  /** Registers `handler` for every message on `channel`, including this instance's own. */
   abstract subscribe<T>(channel: string, handler: EventHandler<T>): Promise<void>;
 
   /** Rejects if the backing service is unreachable within the deadline. */

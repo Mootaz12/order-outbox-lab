@@ -5,6 +5,7 @@ import { DeadLettersService } from '@modules/orders/services/dead-letters.servic
 export class DeadLettersController {
   constructor(private readonly deadLetters: DeadLettersService) {}
 
+  /** GET /dead-letters: every dead-lettered `(order, stage)` pair, most retries first. */
   @Get()
   list() {
     return this.deadLetters.list();

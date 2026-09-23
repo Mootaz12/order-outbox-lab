@@ -1,9 +1,8 @@
 import { createDataSource } from './data-source';
 
 /**
- * Entry point for the one-shot `migrator` compose service. Runs the compiled
- * migrations and exits, so `depends_on: service_completed_successfully` can gate
- * the app instances on the schema actually existing.
+ * Entry point of the one-shot `migrator` service: applies pending migrations in one
+ * transaction and exits, which is what gates the app containers (see docs/architecture.md).
  */
 async function main() {
   const dataSource = createDataSource();

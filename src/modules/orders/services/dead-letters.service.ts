@@ -14,6 +14,7 @@ export class DeadLettersService {
     @InjectRepository(StageRetryEntity) private readonly retries: Repository<StageRetryEntity>,
   ) {}
 
+  /** Returns `stage_retries` rows with status `dead_lettered`, ordered by retryCount desc. */
   list() {
     return this.retries.find({
       where: { status: StageRetryStatus.DeadLettered },

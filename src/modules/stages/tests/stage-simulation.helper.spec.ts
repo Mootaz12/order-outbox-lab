@@ -1,6 +1,6 @@
 import { STAGES, StageName } from '@shared/pipeline';
 import { stageHandlerName } from '@modules/stages/services/stage-handler.factory';
-import { simulatedDelayMs, simulatedFailure } from './stage-simulation.helper';
+import { simulatedDelayMs, simulatedFailure } from '@modules/stages/helpers/stage-simulation.helper';
 import { STAGE_CONFIGS } from '@modules/stages/consts/stages.constants';
 
 describe('stage config table', () => {

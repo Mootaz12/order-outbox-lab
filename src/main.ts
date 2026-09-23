@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { appConfig, AppConfig } from '@config';
 
+/** Boots one app instance: builds the Nest app, enables shutdown hooks, listens on all interfaces. */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();

@@ -14,6 +14,7 @@ export class EventBusHealthIndicator extends HealthIndicator {
     super();
   }
 
+  /** Up if the bus answers a ping within HEALTH_PING_TIMEOUT_MS, else down with the error. */
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
       await this.bus.ping(HEALTH_PING_TIMEOUT_MS);

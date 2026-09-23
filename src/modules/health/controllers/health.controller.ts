@@ -11,10 +11,7 @@ export class HealthController {
     private readonly eventBus: EventBusHealthIndicator,
   ) {}
 
-  /**
-   * Pings both stateful dependencies, so a container that is up but cut off from
-   * Postgres or the event bus reports unhealthy and nginx stops routing to it.
-   */
+  /** Pings Postgres and the event bus; either failing makes `/health` report unhealthy. */
   @Get()
   @HealthCheck()
   check() {

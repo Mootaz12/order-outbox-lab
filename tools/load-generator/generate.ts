@@ -15,6 +15,7 @@ const USAGE = `usage: pnpm load [${LoadMode.Burst} <count> <concurrency>] | [${L
 
 const stats = { created: 0, rejected: 0 };
 
+/** A POST /orders body with a random customer name and a two-decimal amount. */
 function randomOrder() {
   return {
     customerName: `customer-${Math.floor(Math.random() * 10000)}`,
@@ -22,6 +23,7 @@ function randomOrder() {
   };
 }
 
+/** Sends one POST /orders and tallies it; resolves to the new id, or null on any failure. */
 async function createOrder(): Promise<string | null> {
   try {
     const response = await fetch(`${TARGET_URL}/orders`, {
@@ -64,6 +66,7 @@ async function steady(count: number, intervalMs: number): Promise<void> {
   }
 }
 
+/** Parses `<mode> <count> <second>` from argv (default `steady 20 1000`); prints usage and returns null if invalid. */
 function readArgs(): { mode: LoadMode; count: number; second: number } | null {
   const [modeArg = LoadMode.Steady, countArg = '20', secondArg = '1000'] = process.argv.slice(2);
 
@@ -82,6 +85,7 @@ function readArgs(): { mode: LoadMode; count: number; second: number } | null {
   return { mode: modeArg as LoadMode, count, second };
 }
 
+/** Runs the chosen traffic mode against TARGET_URL and prints the created/failed summary. */
 async function main(): Promise<void> {
   const args = readArgs();
   if (!args) {

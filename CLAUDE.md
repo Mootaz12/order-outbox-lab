@@ -9,8 +9,9 @@ A NestJS 11 + TypeORM learning project: transactional outbox on Postgres with `F
 ```bash
 pnpm build                 # runs `pnpm run vendor` first (copies dayjs + plugins into public/vendor/, gitignored)
 pnpm start:dev             # watch mode; needs Postgres + Redis + applied migrations (see below)
-pnpm test                  # jest, only src/**/*.spec.ts (pure units: retry policy, stage config)
-pnpm jest src/modules/stages/helpers/retry-policy.helper.spec.ts   # single file
+pnpm test                  # jest: every src/**/*.spec.ts — src/modules/<feature>/tests/ plus src/config/parse.spec.ts
+pnpm jest src/modules/stages                        # one feature
+pnpm jest src/modules/stages/tests/retry-policy.helper.spec.ts   # single file
 pnpm jest -t 'name of test'                         # single test by name
 pnpm load burst 50 10      # tools/load-generator: POST /orders at TARGET_URL (default :8080)
 pnpm load steady 20 1000
@@ -32,6 +33,10 @@ There is no end-to-end test script; Postgres-dependent behaviour is checked agai
 
 Layout: `src/config/` (typed `registerAs` namespaces), `src/shared/` (pipeline vocabulary), `src/infrastructure/` (database options + migrator + migrations, event bus), `src/modules/<feature>/` (see Conventions for the per-feature folder layout), `public/js/` (dashboard), `tools/load-generator/` (excluded from the Nest build and the Docker image).
 
+## Documentation
+
+`docs/` (architecture, data flow with mermaid diagrams, operations) and each `src/modules/<feature>/README.md` go deeper than this file. When a change alters a flow, update the matching diagram in `docs/data-flow.md` and the feature README. Every function/method carries a JSDoc of at most 2 lines; longer reasoning belongs in the feature README or `docs/`, not in the comment.
+
 ## Architecture
 
 Every instance runs the same roles; there is no leader. Flow:
@@ -52,7 +57,7 @@ Delivery is at-least-once by design; idempotency comes from the unique index, no
 
 - **No string literals for pipeline keys.** Stage names, statuses, event names and the event-bus channel (`EventChannel`) are enums in `src/shared/pipeline.ts`; build stage event names only via `stageEvent()`. Pass enum values as SQL parameters rather than inlining them in queries.
 - **All `process.env` reads live in `registerAs()` factories in `src/config/`.** Inject with `@Inject(appConfig.KEY) app: AppConfig` (types are `ConfigType<typeof x>`); outside DI (the migrator) call the factory directly, e.g. `databaseConfig()`. Add new namespaces to `configNamespaces` in `src/config/index.ts`.
-- **Every feature uses the same folder layout:** `<feature>.module.ts` at the root, then only the subfolders it needs — `controllers/`, `services/` (all injectables, incl. health indicators and the stage handler factory), `helpers/` (pure functions + their `*.spec.ts`), `entities/`, `types/`, `consts/`. File suffixes match the folder: `.controller.ts`, `.service.ts`/`.indicator.ts`/`.factory.ts`, `.helper.ts`, `.entity.ts`, `.types.ts`, `.constants.ts`. Don't put a new file at the feature root.
+- **Every feature uses the same folder layout:** `<feature>.module.ts` at the root, a `README.md` (purpose, routes/events, file map, invariants — keep it current when behaviour changes), then only the subfolders it needs — `controllers/`, `services/` (all injectables, incl. health indicators and the stage handler factory), `helpers/` (pure functions), `entities/`, `types/`, `consts/`, `tests/` (`*.spec.ts` for that feature). File suffixes match the folder: `.controller.ts`, `.service.ts`/`.indicator.ts`/`.factory.ts`, `.helper.ts`, `.entity.ts`, `.types.ts`, `.constants.ts`. Don't put a new file at the feature root. Tests construct classes directly with small hand-written in-memory fakes of our own collaborators (fake `EventBus` subclass, fake `DataSource`/manager, fake repositories) — no real DB/Redis, no mocking libraries.
 - **Constants and types live in their own files per feature:** `consts/<feature>.constants.ts` (tunables like `OUTBOX_BATCH_SIZE`, `MAX_RETRIES`, `STAGE_CONFIGS`) and `types/<feature>.types.ts` (interfaces, enums like `RetryDecision`, raw SQL row types like `RetryCounterRow`). Don't declare `const`/`interface`/`type`/`enum` or inline object types in services, controllers or entities; only create the file when the feature has something to put in it. Pipeline-wide vocabulary stays in `src/shared/pipeline.ts`.
 - **`src/base/` holds every base others extend** — base entities, base DTOs, base interfaces/types — imported via `@base/*`. Don't put a new base class inside a feature.
 - **Import across folders with path aliases:** `@base/*`, `@config`, `@shared/*`, `@infrastructure/*`, `@modules/*` (defined in `tsconfig.json` `paths`, mirrored in the `jest.moduleNameMapper` in `package.json`). Keep `./x` for files in the same folder; anything else — including a sibling subfolder of the same feature — uses the alias (`@modules/orders/services/orders.service`); never `../`. `nest build` rewrites aliases to relative paths in `dist/`, so the runtime needs no resolver — if you ever build with plain `tsc`, that stops being true.

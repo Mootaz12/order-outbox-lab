@@ -39,6 +39,7 @@ export enum EventChannel {
 /** The only per-stage event: a queued retry, consumed by the stage that owns it. */
 export type StageAction = 'retry';
 
+/** Builds a per-stage event name such as `payment.retry`; the only place that shape is assembled. */
 export function stageEvent(stage: StageName, action: StageAction): string {
   return `${stage}.${action}`;
 }

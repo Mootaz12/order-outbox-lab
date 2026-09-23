@@ -1,8 +1,4 @@
-/**
- * Every read goes through here so a non-2xx response becomes a rejected promise.
- * `fetch` resolves on 404 and 500, which silently hands the caller `undefined` fields
- * to render.
- */
+/** GETs `path` as JSON; rejects on a non-2xx status, which bare `fetch` would resolve. */
 export async function getJson(path) {
   const response = await fetch(path);
   if (!response.ok) {

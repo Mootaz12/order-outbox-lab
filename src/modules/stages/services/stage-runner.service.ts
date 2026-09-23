@@ -27,13 +27,7 @@ export abstract class StageRunner {
     this.instanceId = app.instanceId;
   }
 
-  /**
-   * Total on purpose — nothing inside may escape as a rejection. `@OnEvent` handlers
-   * are dispatched by eventemitter2's synchronous `emit`, which discards the promise a
-   * handler returns, so a rejection here surfaces as an unhandledRejection and Node 20
-   * answers those by exiting: an instance with a green healthcheck dies on a transient
-   * query error. Losing one attempt is the lesser failure.
-   */
+  /** Runs one attempt and never rejects: errors are logged and the attempt is lost (see README). */
   async run(orderId: string, attempt: number): Promise<void> {
     try {
       await this.attempt(orderId, attempt);
@@ -48,6 +42,7 @@ export abstract class StageRunner {
     }
   }
 
+  /** Claim, simulate the work, then record completion or hand off to `fail()`. */
   private async attempt(orderId: string, attempt: number): Promise<void> {
     if (!(await this.claim(orderId, attempt))) return;
 
@@ -73,11 +68,7 @@ export abstract class StageRunner {
     );
   }
 
-  /**
-   * Inserting the `started` row *is* the claim. A duplicate delivery of the same
-   * attempt collides on the unique index and inserts nothing, which is how this
-   * stage stays single-run per attempt despite at-least-once event delivery.
-   */
+  /** Inserts and publishes the `started` row; false means a duplicate delivery already claimed it. */
   private async claim(orderId: string, attempt: number): Promise<boolean> {
     if (await this.record(orderId, attempt, StageStatus.Started, null)) {
       await this.publish(orderId, attempt, StageStatus.Started, null);
@@ -90,11 +81,8 @@ export abstract class StageRunner {
     return false;
   }
 
-  /**
-   * One transaction holds the failure row, the retry counter and the queued retry, so
-   * a stage can never be recorded as failed without its retry existing — and the
-   * retry survives the death of this process, unlike a setTimeout backoff would.
-   */
+  /** Atomically records the failure, bumps stage_retries and queues a retry or dead-letters;
+   *  publishes the failed frame only after the commit. */
   private async fail(orderId: string, attempt: number, error: string): Promise<RetryDecision> {
     const decision = await this.dataSource.transaction(async (manager) => {
       await this.record(orderId, attempt, StageStatus.Failed, error, manager);
@@ -136,11 +124,7 @@ export abstract class StageRunner {
     return decision;
   }
 
-  /**
-   * The one write into the audit log. `ON CONFLICT DO NOTHING` is not only for the
-   * claim: a duplicate delivery reaching `completed` would otherwise break the unique
-   * index and throw for a row that is already correct on disk.
-   */
+  /** The single write into `order_stage_events` (`ON CONFLICT DO NOTHING`); true if a row was inserted. */
   private async record(
     orderId: string,
     attempt: number,
@@ -158,6 +142,7 @@ export abstract class StageRunner {
     return inserted.length > 0;
   }
 
+  /** Publishes a stage frame; a bus failure is logged and swallowed, never thrown. */
   private publish(
     orderId: string,
     attempt: number,

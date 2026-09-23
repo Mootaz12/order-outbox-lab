@@ -4,9 +4,8 @@ import { SOURCE_EXT } from './database.constants';
 
 
 /**
- * Connection options shared by the Nest app and the migrator's DataSource, so the two
- * can't drift. Entities are found by glob rather than listed, so a new `*.entity.ts`
- * anywhere under src/ is picked up by both without touching this file.
+ * TypeORM options shared by the Nest app and the migrator; entities come from the
+ * `*.entity.ts` glob, so neither side registers them by hand (see docs/architecture.md).
  */
 export function databaseOptions(config: DatabaseConfig): PostgresConnectionOptions {
   return {

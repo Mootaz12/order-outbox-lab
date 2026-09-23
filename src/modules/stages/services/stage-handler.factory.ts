@@ -14,12 +14,8 @@ export function stageHandlerName(stage: StageName): string {
   return `${stage.charAt(0).toUpperCase()}${stage.slice(1)}Service`;
 }
 
-/**
- * Builds one provider class per stage. It has to be a distinct class, not one class
- * instantiated three times: `@OnEvent` metadata lives on the prototype, and the retry
- * event differs per stage. Each stage subscribes to exactly the fan-out event and its
- * own retry event, and both handlers go straight into `run()`, which never rejects.
- */
+/** Builds a distinct provider class per stage, subscribed to `order.created` and its own `<stage>.retry`.
+ *  One class per stage is required: `@OnEvent` metadata is per-prototype (see README). */
 export function stageHandler(config: StageConfig): Type<StageRunner> {
   @Injectable()
   class StageHandler extends StageRunner {
@@ -35,11 +31,13 @@ export function stageHandler(config: StageConfig): Type<StageRunner> {
       super(dataSource, stageEvents, app);
     }
 
+    /** Fan-out entry point: every stage's first attempt. */
     @OnEvent(OrderEvent.Created)
     async onOrderCreated(payload: OutboxPayload): Promise<void> {
       await this.run(payload.orderId, payload.attempt);
     }
 
+    /** Retry entry point: a stage-tagged outbox row queued by this stage's `fail()`. */
     @OnEvent(stageEvent(config.stage, 'retry'))
     async onRetry(payload: OutboxPayload): Promise<void> {
       await this.run(payload.orderId, payload.attempt);

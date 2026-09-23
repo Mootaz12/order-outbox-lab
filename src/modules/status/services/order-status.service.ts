@@ -19,6 +19,7 @@ export class OrderStatusService implements OnModuleInit {
     private readonly stageEvents: StageEventsService,
   ) {}
 
+  /** Recomputes the order's status on every settled frame; failures are logged, not thrown. */
   async onModuleInit(): Promise<void> {
     // `settled`, not every frame: a `started` row can never change an order's status, and
     // skipping it halves the queries this watcher issues under load.
@@ -29,6 +30,7 @@ export class OrderStatusService implements OnModuleInit {
     });
   }
 
+  /** Two guarded UPDATEs: fulfilled if every stage completed, failed if any dead-lettered. */
   private async recompute(orderId: string): Promise<void> {
     await this.dataSource.query(
       `UPDATE orders o

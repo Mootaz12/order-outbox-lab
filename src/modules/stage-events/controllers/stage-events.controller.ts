@@ -19,6 +19,7 @@ export class StageEventsController {
     return this.events.find({ where: { orderId: id }, order: { id: 'ASC' } });
   }
 
+  /** Live SSE feed of this order's frames as `stage` events; no replay of past rows. */
   @Sse(':id/stream')
   stream(@Param('id', ParseUUIDPipe) id: string): Observable<MessageEvent> {
     return this.stageEvents.forOrder(id).pipe(

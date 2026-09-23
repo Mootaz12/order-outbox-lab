@@ -1,5 +1,5 @@
 import { STAGES, stageEvent } from '@shared/pipeline';
-import { backoffMs, nextActionAfterFailure } from './retry-policy.helper';
+import { backoffMs, nextActionAfterFailure } from '@modules/stages/helpers/retry-policy.helper';
 import { MAX_RETRIES } from '@modules/stages/consts/stages.constants';
 import { RetryDecision } from '@modules/stages/types/stages.types';
 

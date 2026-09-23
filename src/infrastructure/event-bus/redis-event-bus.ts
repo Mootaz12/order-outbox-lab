@@ -24,10 +24,12 @@ export class RedisEventBus extends EventBus implements OnModuleDestroy {
     this.subscriber.on('message', (channel: string, raw: string) => this.dispatch(channel, raw));
   }
 
+  /** JSON-encodes `payload` and publishes it on the command connection. */
   async publish<T>(channel: string, payload: T): Promise<void> {
     await this.publisher.publish(channel, JSON.stringify(payload));
   }
 
+  /** Adds a local handler; only the first handler per channel issues a Redis SUBSCRIBE. */
   async subscribe<T>(channel: string, handler: EventHandler<T>): Promise<void> {
     const existing = this.handlers.get(channel);
     if (existing) {
@@ -39,9 +41,8 @@ export class RedisEventBus extends EventBus implements OnModuleDestroy {
   }
 
   /**
-   * `maxRetriesPerRequest: null` means a command issued while Redis is down is queued
-   * rather than rejected — which is right for publishing but would let a health probe
-   * hang forever, so the caller gets a deadline.
+   * PINGs Redis, rejecting after `deadlineMs`: queued commands (`maxRetriesPerRequest: null`)
+   * would otherwise hang a health probe forever while Redis is down.
    */
   async ping(deadlineMs = DEFAULT_PING_DEADLINE_MS): Promise<void> {
     await Promise.race([
@@ -52,10 +53,12 @@ export class RedisEventBus extends EventBus implements OnModuleDestroy {
     ]);
   }
 
+  /** Closes both connections on shutdown. */
   async onModuleDestroy(): Promise<void> {
     await Promise.all([this.publisher.quit(), this.subscriber.quit()]);
   }
 
+  /** Parses one message and hands it to every local handler; a bad message or handler is logged, never thrown. */
   private dispatch(channel: string, raw: string): void {
     let payload: unknown;
     try {

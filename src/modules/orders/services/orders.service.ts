@@ -15,11 +15,8 @@ export class OrdersService {
     @InjectRepository(OrderEntity) private readonly orders: Repository<OrderEntity>,
   ) {}
 
-  /**
-   * Inserts the order and its outbox row in one transaction, then returns
-   * immediately. Nothing downstream has happened yet at this point — that is the
-   * request, not a shortcoming of it.
-   */
+  /** Saves the order and its untagged outbox row in one transaction; returns the pending order.
+   * Throws BadRequestException (via parseCreateOrder) before touching the DB on a bad body. */
   async create(body: CreateOrderBody): Promise<CreatedOrder> {
     const { customerName, amount } = parseCreateOrder(body);
 
@@ -37,6 +34,7 @@ export class OrdersService {
     });
   }
 
+  /** Returns the newest orders; limit defaults to 50 and is clamped to 1..200 (garbage → 1). */
   list(limit = DEFAULT_LIST_LIMIT) {
     return this.orders.find({
       order: { createdAt: 'DESC' },

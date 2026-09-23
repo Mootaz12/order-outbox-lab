@@ -7,6 +7,7 @@ const SIDEBAR_LIMIT = 50;
 /** Render-diffing keys so a 2s poll does not rebuild rows that have not changed. */
 const keys = { orders: '', dead: '' };
 
+/** Rebuilds the order list only when ids, statuses or the selection changed. */
 function renderOrders(orders, selected, onSelect) {
   // The selected id is part of the key: clicking changes only the highlight, which
   // a data-only comparison would skip and leave the sidebar out of sync.
@@ -28,6 +29,7 @@ function renderOrders(orders, selected, onSelect) {
   );
 }
 
+/** Rebuilds the dead-letter list only when its rows changed. */
 function renderDeadLetters(rows) {
   const key = rows.map((r) => `${r.orderId}:${r.stage}:${r.retryCount}`).join('|');
   if (key === keys.dead) return;

@@ -15,12 +15,14 @@ export class StageEventsService implements OnModuleInit {
 
   constructor(private readonly bus: EventBus) {}
 
+  /** Subscribes to the bus once; every frame (including this instance's own) feeds local SSE. */
   async onModuleInit(): Promise<void> {
     await this.bus.subscribe<StageEventFrame>(EventChannel.StageEvents, (event) =>
       this.subject.next(event),
     );
   }
 
+  /** Broadcasts a frame to every instance via `EventChannel.StageEvents`. */
   publish(event: StageEventFrame): Promise<void> {
     return this.bus.publish(EventChannel.StageEvents, event);
   }

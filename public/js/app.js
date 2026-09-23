@@ -10,8 +10,10 @@ const state = {
 
 const REFRESH_MS = 2000;
 
+/** Re-polls the sidebar, keeping the current selection highlighted. */
 const refresh = () => refreshSidebar(state.selected, select);
 
+/** Switches to order `id`: closes the old stream, hydrates via REST, then opens SSE. */
 async function select(id) {
   state.source?.close();
   state.selected = id;

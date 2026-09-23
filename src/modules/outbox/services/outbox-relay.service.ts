@@ -31,6 +31,7 @@ export class OutboxRelayService {
     this.instanceId = app.instanceId;
   }
 
+  /** One poller tick: claims, emits and marks a batch; never throws and skips if a tick is still running. */
   @Interval(OUTBOX_POLL_INTERVAL_MS)
   async poll(): Promise<void> {
     if (this.running) return;
@@ -47,6 +48,8 @@ export class OutboxRelayService {
     }
   }
 
+  /** In one transaction: locks up to 50 due rows (SKIP LOCKED), emits each unawaited, marks them processed.
+   * Returns the number of rows claimed; emits happen before commit, so delivery is at-least-once. */
   private async claimAndEmit(): Promise<number> {
     return this.dataSource.transaction(async (manager) => {
       const rows = await manager

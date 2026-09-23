@@ -59,6 +59,18 @@ hydrate its stage timeline from `order_stage_events` and then watch it update ov
 
 Tear down with `docker compose down`, or `docker compose down -v` to drop the data too.
 
+## Documentation
+
+This README is the tour. Deeper notes live in [docs/](docs/README.md):
+[architecture](docs/architecture.md) covers the deployment, the source layers, the module
+dependency graph and the reasoning behind each design decision;
+[data flow](docs/data-flow.md) walks every path with a diagram — order creation, the
+`SKIP LOCKED` relay tick, a stage attempt through retry and dead-letter, live updates over the
+event bus and SSE, status settlement — and ends with an ER diagram of the four tables;
+[operations](docs/operations.md) collects the commands, log patterns and `psql` queries for
+running and inspecting the stack. Each feature also has its own `README.md` in
+`src/modules/<feature>/`.
+
 ## Order lifecycle
 
 ```mermaid
@@ -81,19 +93,21 @@ sequenceDiagram
     Note over A: poller tick, every 2s, on all three instances
     A->>P: SELECT ... FOR UPDATE SKIP LOCKED
     P-->>A: only the rows app2 and app3 are not holding
-    A->>A: emit order.created in-process
+    A->>A: emit order.created in-process, not awaited
+    A->>P: UPDATE outbox SET processed = true — COMMIT, releasing the locks
     A->>P: INSERT order_stage_events started ON CONFLICT DO NOTHING
     A->>R: PUBLISH stage_events
     R-->>B: SSE frame — app3 serves the browser, app1 did the work
     Note over A: simulated work, 400 to 2000ms per stage
     A->>P: INSERT order_stage_events completed
     A->>R: PUBLISH stage_events
-    A->>P: UPDATE outbox SET processed = true
-    B->>P: status watcher recomputes orders.status
+    Note over A,R: every instance receives the settled frame, and each one's status watcher<br/>runs the guarded UPDATE — only the first changes the row
 ```
 
-Two things to read off this: step 4 commits the order and its event together, and steps
-7–9 cross an instance boundary that an in-process emitter alone could not.
+Two things to read off this: step 3 commits the order and its event together, and steps
+11–12 cross an instance boundary that an in-process emitter alone could not. Note also that
+the relay marks the row processed in step 9, *before* any stage has run — the stages never
+touch their outbox row, which is why delivery is at-least-once rather than exactly-once.
 
 ## What each piece is for
 
@@ -149,7 +163,7 @@ flowchart TD
     claim -->|no| work["simulate work<br/>randomised delay"]
     work --> roll{"failure roll below<br/>failureRate?"}
     roll -->|no| ok["INSERT completed row"]
-    ok --> pub_ok["publish the frame, then<br/>mark the outbox row processed"]
+    ok --> pub_ok["publish the completed frame"]
     roll -->|yes| txn["one transaction"]
     txn --> t1["INSERT failed row"]
     t1 --> t2["UPSERT stage_retries<br/>retry_count = retry_count + 1<br/>RETURNING retry_count"]
@@ -282,10 +296,12 @@ file list:
 
 ```
 modules/<feature>/
-  <feature>.module.ts        the one file at the root: what the feature wires together
+  <feature>.module.ts        what the feature wires together
+  README.md                  what the feature does, its files, and its invariants
   controllers/               HTTP entry points
   services/                  injectable providers (the stage runner and its handler factory too)
-  helpers/                   pure functions, with their specs beside them
+  helpers/                   pure functions
+  tests/                     *.spec.ts for this feature, using in-memory fakes
   entities/                  TypeORM entities, classes suffixed Entity (OrderEntity, …)
   types/                     <feature>.types.ts — interfaces, enums, SQL row shapes
   consts/                    <feature>.constants.ts — tunables and lookup tables
@@ -358,7 +374,8 @@ hydrate over REST, then subscribe over SSE). `dom.js` deliberately has no HTML-a
 | `GET /dead-letters` | `(order, stage)` pairs that exhausted their retries |
 | `GET /health` | Terminus check that pings Postgres **and** the event bus (`eventBus` key) |
 
-Nginx adds `X-Served-By`, so you can see which instance answered:
+Nginx adds `X-Served-By` with its upstream address — the answering container's IP and port,
+not its `INSTANCE_ID`:
 
 ```bash
 curl -si localhost:8080/health | grep -i x-served-by
@@ -394,9 +411,13 @@ Details: [tools/load-generator/README.md](tools/load-generator/README.md).
 
 ## Testing
 
-`pnpm test` covers the pure pieces: the retry policy, the stage config table and the event
-vocabulary. Everything that depends on real Postgres behaviour — `SKIP LOCKED`, the unique-index
-claim, the status watcher — is only meaningful against the running stack. Two things only show
+`pnpm test` runs each feature's `tests/` folder (88 tests): the pure helpers, plus services and
+controllers driven through small in-memory fakes of their collaborators — the relay's routing
+and locking options, the full stage-attempt lifecycle including retry, dead-letter and a `run()`
+that never rejects, the event-bus fan-out into SSE, and the status watcher's guarded updates.
+The fakes prove the code issues the right calls in the right order; they cannot prove what
+Postgres does with them. `SKIP LOCKED`, the unique-index claim and the real status
+recomputation are only meaningful against the running stack. Two things only show
 up at volume and are worth knowing before you read the logs:
 
 - **`SKIP LOCKED` racing needs a burst.** Each poller runs on the same `@Interval(2000)` and
@@ -411,9 +432,11 @@ up at volume and are worth knowing before you read the logs:
 
 ```bash
 docker compose up -d db redis migrator
-export DATABASE_URL=postgres://app:app@localhost:5432/orders REDIS_URL=redis://localhost:6379
 pnpm install && pnpm build && pnpm start:dev
 ```
+
+The config defaults in `src/config/` already point at `localhost`; set `DATABASE_URL`,
+`REDIS_URL`, `PORT` or `INSTANCE_ID` (or put them in `.env`) only to override them.
 
 `pnpm build` runs `pnpm run vendor` first, which copies `dayjs.min.js` plus the `utc` and
 `localizedFormat` plugins into `public/vendor/`. That directory is generated and gitignored;

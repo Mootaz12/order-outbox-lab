@@ -1,9 +1,5 @@
-/**
- * DOM construction in one place, and it deliberately has no HTML-accepting path.
- * `customerName` and stage `detail` are caller-supplied strings rendered straight
- * into the page; `innerHTML` would turn a name like `<img src=x onerror=...>` into
- * executed script, so every node here is built with `textContent`.
- */
+/** Creates `<tag class=className>` with `text` set via `textContent` — never HTML,
+ * since `customerName` and stage `detail` are user-controlled. */
 export function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -11,8 +7,10 @@ export function el(tag, className, text) {
   return node;
 }
 
+/** Status pill whose CSS class and label are both the status value. */
 export function badge(status) {
   return el('span', `badge ${status}`, status);
 }
 
+/** Shorthand for `document.getElementById`. */
 export const byId = (id) => document.getElementById(id);
