@@ -92,7 +92,7 @@ Detail: [src/modules/outbox/README.md](../src/modules/outbox/README.md).
 
 `StageHandler.onOrderCreated` / `onRetry` → `StageRunner.run` → `attempt` → `claim`,
 `record`, `fail`, `publish`. `run()` catches everything: eventemitter2 discards the handler's
-promise, and an unhandled rejection would exit the Node 20 process.
+promise, and an unhandled rejection would exit the Node process (the default since Node 15).
 
 ```mermaid
 flowchart TD

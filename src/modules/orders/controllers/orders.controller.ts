@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { ListOrdersQueryDto } from '@modules/orders/dtos/list-orders-query.dto';
 import { OrdersService } from '@modules/orders/services/orders.service';
 import { CreateOrderBody } from '@modules/orders/types/orders.types';
 
@@ -12,9 +13,9 @@ export class OrdersController {
     return this.orders.create(body ?? {});
   }
 
-  /** GET /orders?limit=N: newest orders first; a non-numeric limit becomes NaN and is clamped to 1. */
+  /** GET /orders?limit=&order=&status=: validated by ListOrdersQueryDto (400 on bad params). */
   @Get()
-  list(@Query('limit') limit?: string) {
-    return this.orders.list(limit === undefined ? undefined : Number(limit));
+  list(@Query() query: ListOrdersQueryDto) {
+    return this.orders.list(query);
   }
 }

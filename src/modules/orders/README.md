@@ -12,8 +12,8 @@ feature owns that.
 | Route | Handler | Returns |
 | --- | --- | --- |
 | `POST /orders` `{ customerName, amount }` | `OrdersController.create` → `OrdersService.create` | `201` `CreatedOrder` (`id, customerName, amount, status: 'pending'`); `400` on a bad body |
-| `GET /orders?limit=N` | `OrdersController.list` → `OrdersService.list` | newest first; `limit` default 50, clamped to 1..200, garbage → 1 |
-| `GET /dead-letters` | `DeadLettersController.list` → `DeadLettersService.list` | `stage_retries` rows with status `dead_lettered`, most retries first |
+| `GET /orders?limit=&order=&status=` | `OrdersController.list` → `OrdersService.list` | `ListOrdersQueryDto`: sorted by `created_at` (default `Desc`), optional `status`; bad params → 400 |
+| `GET /dead-letters?limit=&order=&stage=` | `DeadLettersController.list` → `DeadLettersService.list` | `ListDeadLettersQueryDto`: `dead_lettered` rows sorted by `retry_count` (default `Desc`), optional `stage` |
 
 Events: emits none directly. Its outbox row later becomes `order.created` via the outbox relay.
 
@@ -21,11 +21,12 @@ Events: emits none directly. Its outbox row later becomes `order.created` via th
 
 - `orders.module.ts` — registers `OrderEntity` and `StageRetryEntity` repositories.
 - `controllers/` — `orders.controller.ts`, `dead-letters.controller.ts` (thin; no logic).
+- `dtos/` — `list-orders-query.dto.ts`, `list-dead-letters-query.dto.ts` (extend `@base/base-query.dto`: `limit` 1–200 default 50, `order`).
 - `services/` — `orders.service.ts` (create + list), `dead-letters.service.ts` (read-only).
 - `helpers/parse-create-order.helper.ts` — hand-written body validation (there are no DTO classes).
 - `entities/order.entity.ts` — `OrderEntity` on `orders` (extends `@base/base-entity`).
 - `types/orders.types.ts` — `CreateOrderBody` (untrusted, all `unknown`), `CreateOrderInput`, `CreatedOrder`.
-- `consts/orders.constants.ts` — `FIRST_ATTEMPT = 1`, `DEFAULT_LIST_LIMIT`, `MAX_LIST_LIMIT`.
+- `consts/orders.constants.ts` — `FIRST_ATTEMPT = 1` (page-size limits now live in `@base/base.constants`).
 - `tests/` — parser, `OrdersService` (create transaction + list clamping), `DeadLettersService`, all with in-memory fakes.
 
 ## Invariants and why

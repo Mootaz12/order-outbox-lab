@@ -12,7 +12,7 @@ import { OutboxPayload } from '@modules/outbox/types/outbox.types';
 @Entity('outbox')
 @Index(['processed', 'availableAt'])
 export class OutboxEntity extends BaseEntity {
-  @Column({ name: 'order_id', type: 'uuid' })
+  @Column({ type: 'uuid' })
   orderId: string;
 
   @ManyToOne(() => OrderEntity, { onDelete: 'CASCADE' })
@@ -28,9 +28,9 @@ export class OutboxEntity extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   processed: boolean;
 
-  @Column({ name: 'available_at', type: 'timestamptz', default: () => 'now()' })
+  @Column({ type: 'timestamptz', default: () => 'now()' })
   availableAt: Date;
 
-  @Column({ name: 'processed_at', type: 'timestamptz', nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   processedAt: Date | null;
 }

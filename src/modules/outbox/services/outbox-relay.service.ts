@@ -4,6 +4,7 @@ import { Interval } from '@nestjs/schedule';
 import { DataSource, In } from 'typeorm';
 import { appConfig, AppConfig } from '@config';
 import { OrderEvent, stageEvent } from '@shared/pipeline';
+import { Order } from '@shared/order.enum';
 import { OUTBOX_BATCH_SIZE, OUTBOX_POLL_INTERVAL_MS } from '@modules/outbox/consts/outbox.constants';
 import { OutboxEntity } from '@modules/outbox/entities/outbox.entity';
 
@@ -56,8 +57,8 @@ export class OutboxRelayService {
         .createQueryBuilder(OutboxEntity, 'outbox')
         .where('outbox.processed = false')
         .andWhere('outbox.available_at <= now()')
-        .orderBy('outbox.created_at', 'ASC')
-        .addOrderBy('outbox.id', 'ASC')
+        .orderBy('outbox.created_at', Order.Asc)
+        .addOrderBy('outbox.id', Order.Asc)
         .limit(OUTBOX_BATCH_SIZE)
         .setLock('pessimistic_write')
         .setOnLocked('skip_locked')

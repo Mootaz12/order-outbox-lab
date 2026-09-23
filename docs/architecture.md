@@ -73,9 +73,9 @@ flowchart TD
     main["main.ts + app.module.ts<br/>composition root"]
     modules["modules/&lt;feature&gt;<br/>orders, outbox, stages,<br/>stage-events, status, health"]
     infra["infrastructure/<br/>database (options, module, migrator, migrations)<br/>event-bus (abstract EventBus + RedisEventBus)"]
-    shared["shared/pipeline.ts<br/>enums: stages, statuses, events, channels"]
+    shared["shared/<br/>pipeline.ts: stages, statuses, events, channels<br/>order.enum.ts: Order.Asc / Order.Desc"]
     config["config/<br/>registerAs namespaces: app, database, eventBus"]
-    base["base/<br/>BaseEntity"]
+    base["base/<br/>BaseEntity, BaseQueryDto"]
 
     main --> modules
     main --> infra
@@ -89,9 +89,9 @@ flowchart TD
 
 | Layer | Path alias | What lives there |
 | --- | --- | --- |
-| base | `@base/*` | Classes and shapes others extend. Today: `BaseEntity` (uuid `id`, `created_at`, `updated_at`, soft-delete `deleted_at`). |
+| base | `@base/*` | Classes and shapes others extend. Today: `BaseEntity` (uuid `id`, `created_at`, `updated_at`, soft-delete `deleted_at`) and `BaseQueryDto` (`limit`, `order`) with its defaults in `base.constants.ts`. |
 | config | `@config` | One `registerAs()` factory per namespace (`app`, `database`, `eventBus`), the only place `process.env` is read. `configNamespaces` lists them for `ConfigModule.forRoot`. |
-| shared | `@shared/*` | `pipeline.ts`: `StageName`, `StageStatus`, `OrderStatus`, `StageRetryStatus`, `OrderEvent`, `EventChannel`, `stageEvent()`, `STAGES`, `STAGE_COUNT`. |
+| shared | `@shared/*` | `pipeline.ts`: `StageName`, `StageStatus`, `OrderStatus`, `StageRetryStatus`, `OrderEvent`, `EventChannel`, `stageEvent()`, `STAGES`, `STAGE_COUNT`. `order.enum.ts`: `Order` (`Asc`/`Desc`), the sort direction every query uses. |
 | infrastructure | `@infrastructure/*` | `database/`: TypeORM options shared by app and migrator, `DatabaseModule`, the migrator entry point, migrations. `event-bus/`: the `EventBus` abstraction and its Redis driver (a `@Global()` module). |
 | modules | `@modules/*` | One folder per feature. |
 
@@ -105,6 +105,7 @@ in pipeline order.
 modules/<feature>/
   <feature>.module.ts   the only file at the feature root
   controllers/          *.controller.ts   HTTP entry points
+  dtos/                 *.dto.ts   validated query DTOs extending @base/base-query.dto
   services/             *.service.ts, *.indicator.ts, *.factory.ts   all injectables
   helpers/              *.helper.ts   pure functions
   entities/             *.entity.ts   TypeORM entities, classes suffixed Entity
@@ -232,6 +233,19 @@ are found by the `*.entity.ts` glob rather than listed, so a new entity file any
 `src/` is picked up by both without touching that file. `SOURCE_EXT` switches the glob between
 `.ts` (ts-node) and `.js` (compiled output). Don't switch to `autoLoadEntities`: `OutboxEntity`
 is used only through `manager.insert` and is in no `forFeature`.
+
+Columns are named by `SnakeNamingStrategy` (`typeorm-naming-strategies`), so entities don't
+spell out `name:` for `customer_name`, `created_at` and the rest; table names stay explicit in
+`@Entity()` since the classes end in `Entity`. Switching the strategy on produced identical
+entity metadata, so no migration was needed.
+
+### Validated query DTOs
+
+Every list endpoint takes a query DTO extending `BaseQueryDto` (`limit` 1–200 default 50,
+`order` as the `Order` enum). A global `ValidationPipe({ transform: true, whitelist: true })`
+builds the DTO with its defaults and returns 400 with the reason for anything invalid, so
+services receive typed values instead of parsing strings. Queries live in services, never in
+controllers.
 
 `BaseEntity` lives in `src/base/base-entity.ts`, deliberately outside the entity glob and
 without `@Entity`, so it adds columns to its subclasses without becoming a table. TypeORM

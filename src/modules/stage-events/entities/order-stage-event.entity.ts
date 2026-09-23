@@ -15,7 +15,7 @@ export class OrderStageEventEntity {
   @PrimaryGeneratedColumn({ type: 'bigint' })
   id: string;
 
-  @Column({ name: 'order_id', type: 'uuid' })
+  @Column({ type: 'uuid' })
   orderId: string;
 
   @Column({ type: 'text' })
@@ -30,6 +30,6 @@ export class OrderStageEventEntity {
   @Column({ type: 'text', nullable: true })
   detail: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }

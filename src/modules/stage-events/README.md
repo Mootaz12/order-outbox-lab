@@ -8,7 +8,7 @@ the dashboard.
 
 | Direction | What |
 | --- | --- |
-| in (HTTP) | `GET /orders/:id/stages` — rows for the order, `ORDER BY id ASC` (hydration) |
+| in (HTTP) | `GET /orders/:id/stages?limit=&order=` — rows for the order via `ListStageEventsQueryDto`, `ORDER BY id` oldest first by default (hydration) |
 | in (HTTP) | `GET /orders/:id/stream` — SSE, one `stage` event per frame for that order |
 | in (call) | `publish(frame)` — called by `stages` after each commit |
 | out (bus) | `EventChannel.StageEvents` (`stage_events`) — every frame, to every instance |
@@ -19,9 +19,11 @@ the dashboard.
 
 ## Files
 
-- `stage-events.module.ts` — registers the entity, controller and service; exports the service.
-- `controllers/stage-events.controller.ts` — the two routes above.
+- `stage-events.module.ts` — registers the entity, controller and both services; exports `StageEventsService`.
+- `controllers/stage-events.controller.ts` — the two routes above (no queries of its own).
+- `dtos/list-stage-events-query.dto.ts` — extends `BaseQueryDto`, redeclares `order` to default to `Asc`.
 - `services/stage-events.service.ts` — bus publish/subscribe and the local `Subject` fan-out.
+- `services/stage-event-history.service.ts` — `listForOrder()`, the read side of `order_stage_events`.
 - `entities/order-stage-event.entity.ts` — `OrderStageEventEntity` (bigserial id, no `BaseEntity`).
 - `types/stage-events.types.ts` — `StageEventFrame`, the one wire contract.
 - `tests/` — service (fake in-memory `EventBus`) and controller specs.

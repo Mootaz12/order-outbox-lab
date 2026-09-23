@@ -274,9 +274,9 @@ Four tables: `orders`, `outbox`, `order_stage_events` (append-only, the read mod
 ```
 src/
   main.ts  app.module.ts     composition root: infrastructure, then feature modules
-  base/                      base classes and shapes others extend: BaseEntity (@base/*)
+  base/                      bases others extend: BaseEntity, BaseQueryDto (@base/*)
   config/                    typed registerAs() namespaces: app, database, eventBus
-  shared/                    pipeline.ts (the vocabulary)
+  shared/                    pipeline.ts (the vocabulary), order.enum.ts (Order.Asc / Order.Desc)
   infrastructure/
     database/                TypeORM options, DatabaseModule, migrator, migrations
     event-bus/               abstract EventBus + RedisEventBus driver (global)
@@ -299,6 +299,7 @@ modules/<feature>/
   <feature>.module.ts        what the feature wires together
   README.md                  what the feature does, its files, and its invariants
   controllers/               HTTP entry points
+  dtos/                      *.dto.ts — validated query/body classes, extending @base DTOs
   services/                  injectable providers (the stage runner and its handler factory too)
   helpers/                   pure functions
   tests/                     *.spec.ts for this feature, using in-memory fakes
@@ -309,7 +310,9 @@ modules/<feature>/
 
 A folder exists only when the feature has something to put in it (status is just `services/`).
 Services, controllers and entities import constants and types rather than declaring them.
-Entities are discovered by the `*.entity.ts` glob in
+Columns are named by TypeORM's `SnakeNamingStrategy` (`typeorm-naming-strategies`):
+`customerName` maps to `customer_name` without a `name:` option. Table names stay explicit in
+`@Entity('orders')`, because the class names end in `Entity`. Entities are discovered by the `*.entity.ts` glob in
 `src/infrastructure/database/database-options.ts`, which both the app and the migrator use — a
 new entity needs the file suffix and a migration, nothing registered by hand. `orders` and
 `outbox` extend `BaseEntity` (`src/base/base-entity.ts`) for their uuid `id`, `created_at`,
@@ -368,11 +371,17 @@ hydrate over REST, then subscribe over SSE). `dom.js` deliberately has no HTML-a
 | | |
 | --- | --- |
 | `POST /orders` | `{ customerName, amount }` → `201 { id }`, returns before any processing |
-| `GET /orders?limit=50` | recent orders with status |
-| `GET /orders/:id/stages` | current stage rows from Postgres, for hydrating before subscribing |
+| `GET /orders?limit=&order=&status=` | orders by `created_at` (newest first by default), optionally one status |
+| `GET /orders/:id/stages?limit=&order=` | an order's stage rows from Postgres (oldest first by default), for hydrating before subscribing |
 | `GET /orders/:id/stream` | SSE, `stage` events as they happen |
-| `GET /dead-letters` | `(order, stage)` pairs that exhausted their retries |
+| `GET /dead-letters?limit=&order=&stage=` | `(order, stage)` pairs that exhausted their retries, optionally one stage |
 | `GET /health` | Terminus check that pings Postgres **and** the event bus (`eventBus` key) |
+
+List endpoints take a query DTO (`dtos/*.dto.ts`) extending `BaseQueryDto` (`src/base/`):
+`limit` (1–200, default 50) and `order` (`asc`/`desc`, any case, mapped to the `Order` enum in
+`src/shared/order.enum.ts`), plus each endpoint's own filters. A global `ValidationPipe`
+(`transform`, `whitelist`) turns the query string into the DTO with its defaults and answers
+`400` with the reason for anything out of range; unknown params are dropped.
 
 Nginx adds `X-Served-By` with its upstream address — the answering container's IP and port,
 not its `INSTANCE_ID`:
@@ -463,7 +472,7 @@ These are the honest edges of a first pass, not hidden bugs:
 - **Stage handlers must never reject, and `StageRunner.run` is total to enforce that.** The
   relay fires events without awaiting them, because awaiting would hold the `SKIP LOCKED` row
   locks for the whole simulated stage. eventemitter2's synchronous `emit` discards the promise
-  a handler returns, so a rejection surfaces as an unhandledRejection — and Node 20 answers
+  a handler returns, so a rejection surfaces as an unhandledRejection — and Node (15+) answers
   those by exiting, killing an instance whose healthcheck was green. The cost of the trade is
   that an unexpected error logs at `error` level and loses that attempt.
 - **SSE publication happens after the commit**, for failures as well as successes. That is not

@@ -5,7 +5,8 @@ import { OrderStatus } from '@shared/pipeline';
 import { OrderEntity } from '@modules/orders/entities/order.entity';
 import { enqueueOutbox } from '@modules/outbox/helpers/enqueue-outbox.helper';
 import { parseCreateOrder } from '@modules/orders/helpers/parse-create-order.helper';
-import { DEFAULT_LIST_LIMIT, FIRST_ATTEMPT, MAX_LIST_LIMIT } from '@modules/orders/consts/orders.constants';
+import { FIRST_ATTEMPT } from '@modules/orders/consts/orders.constants';
+import { ListOrdersQueryDto } from '@modules/orders/dtos/list-orders-query.dto';
 import { CreatedOrder, CreateOrderBody } from '@modules/orders/types/orders.types';
 
 @Injectable()
@@ -34,11 +35,12 @@ export class OrdersService {
     });
   }
 
-  /** Returns the newest orders; limit defaults to 50 and is clamped to 1..200 (garbage → 1). */
-  list(limit = DEFAULT_LIST_LIMIT) {
+  /** Returns up to `query.limit` orders sorted by `created_at`, optionally filtered by status. */
+  list(query: ListOrdersQueryDto): Promise<OrderEntity[]> {
     return this.orders.find({
-      order: { createdAt: 'DESC' },
-      take: Math.min(Math.max(Number(limit) || 1, 1), MAX_LIST_LIMIT),
+      where: query.status ? { status: query.status } : {},
+      order: { createdAt: query.order },
+      take: query.limit,
     });
   }
 }

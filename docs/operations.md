@@ -35,6 +35,19 @@ pnpm load burst 1000 25    # needed to exercise the dead-letter path (0.15^3 for
 
 See [tools/load-generator/README.md](../tools/load-generator/README.md).
 
+## Querying the API
+
+List endpoints validate their query string (see the root README's API section); a bad value
+comes back as `400` with the reason.
+
+```bash
+curl -s 'localhost:8080/orders?status=failed&limit=5'           # newest 5 failed orders
+curl -s 'localhost:8080/orders?order=asc&limit=3'               # the 3 oldest orders
+curl -s 'localhost:8080/dead-letters?stage=inventory'           # dead letters for one stage
+curl -s "localhost:8080/orders/$ID/stages?order=desc&limit=2"   # an order's 2 latest stage rows
+curl -s 'localhost:8080/orders?limit=500'                       # 400: limit must not be greater than 200
+```
+
 ## What /health checks
 
 `GET /health` (Terminus, [src/modules/health/README.md](../src/modules/health/README.md)) runs

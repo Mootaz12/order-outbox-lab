@@ -7,18 +7,18 @@ import { StageName, StageRetryStatus } from '@shared/pipeline';
  */
 @Entity('stage_retries')
 export class StageRetryEntity {
-  @PrimaryColumn({ name: 'order_id', type: 'uuid' })
+  @PrimaryColumn({ type: 'uuid' })
   orderId: string;
 
   @PrimaryColumn({ type: 'text' })
   stage: StageName;
 
-  @Column({ name: 'retry_count', type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0 })
   retryCount: number;
 
   @Column({ type: 'text', default: StageRetryStatus.Pending })
   status: StageRetryStatus;
 
-  @Column({ name: 'last_error', type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true })
   lastError: string | null;
 }

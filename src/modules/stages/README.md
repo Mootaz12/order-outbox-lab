@@ -51,7 +51,7 @@ flowchart TD
 
 - **`run()` is total — it must never reject.** `@OnEvent` handlers are dispatched by
   eventemitter2's synchronous `emit`, which discards the promise a handler returns, so a
-  rejection would surface as an unhandledRejection, and Node 20 answers those by exiting:
+  rejection would surface as an unhandledRejection, and Node (15+) answers those by exiting:
   an instance with a green healthcheck would die on a transient query error. Losing one
   attempt (logged at `error`; its outbox row is already processed, so only a manual
   re-enqueue re-runs it) is the lesser failure. Don't add awaits in the relay to "fix" this.

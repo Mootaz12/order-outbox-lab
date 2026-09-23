@@ -16,20 +16,20 @@ export abstract class BaseEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
   /**
    * TypeORM stamps this on `save()` and query-builder `update()`. Raw SQL bypasses it,
    * so a hand-written `UPDATE` on one of these tables must set `updated_at = now()`.
    */
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
   /**
    * Soft delete: repository reads skip rows where this is set. Nothing deletes yet;
    * raw SQL that should honour it needs its own `deleted_at IS NULL`.
    */
-  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
 }

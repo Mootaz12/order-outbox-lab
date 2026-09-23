@@ -4,7 +4,7 @@ import { OrderStatus } from '@shared/pipeline';
 
 @Entity('orders')
 export class OrderEntity extends BaseEntity {
-  @Column({ name: 'customer_name', type: 'text' })
+  @Column({ type: 'text' })
   customerName: string;
 
   // Postgres `numeric` is returned as a string by the driver to avoid precision loss.

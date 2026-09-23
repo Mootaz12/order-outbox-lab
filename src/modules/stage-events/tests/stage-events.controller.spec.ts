@@ -1,22 +1,24 @@
 import { BadRequestException, MessageEvent, ParseUUIDPipe } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
 import { Subject, firstValueFrom } from 'rxjs';
-import { Repository } from 'typeorm';
 import { StageName, StageStatus } from '@shared/pipeline';
 import { StageEventsController } from '@modules/stage-events/controllers/stage-events.controller';
 import { OrderStageEventEntity } from '@modules/stage-events/entities/order-stage-event.entity';
+import { ListStageEventsQueryDto } from '@modules/stage-events/dtos/list-stage-events-query.dto';
+import { StageEventHistoryService } from '@modules/stage-events/services/stage-event-history.service';
 import { StageEventsService } from '@modules/stage-events/services/stage-events.service';
 import { StageEventFrame } from '@modules/stage-events/types/stage-events.types';
 
 const ORDER_ID = '4f9c2a8e-1b3d-4c5e-8f70-123456789abc';
 
-/** Repository stand-in that records find() options and returns canned rows. */
-class FakeRepository {
-  readonly calls: unknown[] = [];
+/** StageEventHistoryService stand-in that records its arguments and returns canned rows. */
+class FakeHistory {
+  readonly calls: Array<[string, ListStageEventsQueryDto]> = [];
   rows: OrderStageEventEntity[] = [];
 
-  /** Records the options and returns the canned rows. */
-  async find(options: unknown): Promise<OrderStageEventEntity[]> {
-    this.calls.push(options);
+  /** Records the call and returns the canned rows. */
+  async listForOrder(orderId: string, query: ListStageEventsQueryDto): Promise<OrderStageEventEntity[]> {
+    this.calls.push([orderId, query]);
     return this.rows;
   }
 }
@@ -34,24 +36,25 @@ class FakeStageEvents {
 }
 
 describe('StageEventsController', () => {
-  let repo: FakeRepository;
+  let history: FakeHistory;
   let stageEvents: FakeStageEvents;
   let controller: StageEventsController;
 
   beforeEach(() => {
-    repo = new FakeRepository();
+    history = new FakeHistory();
     stageEvents = new FakeStageEvents();
     controller = new StageEventsController(
       stageEvents as unknown as StageEventsService,
-      repo as unknown as Repository<OrderStageEventEntity>,
+      history as unknown as StageEventHistoryService,
     );
   });
 
-  it('stages() queries rows for the order ordered by id ascending', async () => {
+  it('stages() hands the order id and the validated query to the history service', async () => {
     const row = { id: '1', orderId: ORDER_ID } as OrderStageEventEntity;
-    repo.rows = [row];
-    await expect(controller.stages(ORDER_ID)).resolves.toEqual([row]);
-    expect(repo.calls).toEqual([{ where: { orderId: ORDER_ID }, order: { id: 'ASC' } }]);
+    history.rows = [row];
+    const query = plainToInstance(ListStageEventsQueryDto, {});
+    await expect(controller.stages(ORDER_ID, query)).resolves.toEqual([row]);
+    expect(history.calls).toEqual([[ORDER_ID, query]]);
   });
 
   it('stream() wraps each frame of the order as an SSE `stage` event', async () => {

@@ -1,3 +1,6 @@
+import { plainToInstance } from 'class-transformer';
+import { Order } from '@shared/order.enum';
+import { ListOrdersQueryDto } from '@modules/orders/dtos/list-orders-query.dto';
 import { DataSource, Repository } from 'typeorm';
 import { OrderStatus } from '@shared/pipeline';
 import { OrdersService } from '@modules/orders/services/orders.service';
@@ -81,20 +84,25 @@ describe('OrdersService.create', () => {
 });
 
 describe('OrdersService.list', () => {
-  it.each([
-    [undefined, 50],
-    [10, 10],
-    [200, 200],
-    [500, 200],
-    [0, 1],
-    [-5, 1],
-    [NaN, 1],
-    ['abc' as unknown as number, 1],
-  ])('limit %p → take %p, newest first', async (limit, take) => {
+  it('defaults to the newest 50 orders of any status', async () => {
     const { service, repo } = build();
 
-    await service.list(limit);
+    await service.list(plainToInstance(ListOrdersQueryDto, {}));
 
-    expect(repo.find).toHaveBeenCalledWith({ order: { createdAt: 'DESC' }, take });
+    expect(repo.find).toHaveBeenCalledWith({ where: {}, order: { createdAt: Order.Desc }, take: 50 });
+  });
+
+  it('passes the status filter, sort direction and limit straight through', async () => {
+    const { service, repo } = build();
+
+    await service.list(
+      plainToInstance(ListOrdersQueryDto, { status: OrderStatus.Failed, order: Order.Asc, limit: 10 }),
+    );
+
+    expect(repo.find).toHaveBeenCalledWith({
+      where: { status: OrderStatus.Failed },
+      order: { createdAt: Order.Asc },
+      take: 10,
+    });
   });
 });
