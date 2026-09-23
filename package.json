@@ -54,6 +54,13 @@
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@base/(.*)$": "<rootDir>/base/$1",
+      "^@config$": "<rootDir>/config",
+      "^@shared/(.*)$": "<rootDir>/shared/$1",
+      "^@infrastructure/(.*)$": "<rootDir>/infrastructure/$1",
+      "^@modules/(.*)$": "<rootDir>/modules/$1"
+    }
   }
 }

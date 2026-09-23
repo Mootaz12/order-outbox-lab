@@ -129,7 +129,7 @@ payment, inventory and email run there. That's deliberate: work spreads across i
 without each one doing the whole job. Stages have randomized delays (payment 700–1500ms,
 inventory 900–2000ms, email 400–1000ms) and different failure rates (10%, 15%, 5%), which
 is what makes interleaving and retries observable. Those numbers live in one table,
-`STAGE_CONFIGS` in `src/modules/stages/stages.constants.ts`.
+`STAGE_CONFIGS` in `src/modules/stages/consts/stages.constants.ts`.
 
 **Durable retries.** A failing stage does three things in one transaction: appends its
 `failed` row, upserts `stage_retries`, and enqueues a *new outbox row tagged with its own
@@ -260,14 +260,15 @@ Four tables: `orders`, `outbox`, `order_stage_events` (append-only, the read mod
 ```
 src/
   main.ts  app.module.ts     composition root: infrastructure, then feature modules
+  base/                      base classes and shapes others extend: BaseEntity (@base/*)
   config/                    typed registerAs() namespaces: app, database, eventBus
   shared/                    pipeline.ts (the vocabulary)
   infrastructure/
-    database/                TypeORM options, DatabaseModule, migrator entrypoint, migrations
+    database/                TypeORM options, DatabaseModule, migrator, migrations
     event-bus/               abstract EventBus + RedisEventBus driver (global)
   modules/
     orders/                  POST/GET /orders, GET /dead-letters, input parsing
-    outbox/                  Outbox entity, enqueueOutbox(), the SKIP LOCKED relay
+    outbox/                  OutboxEntity, enqueueOutbox(), the SKIP LOCKED relay
     stages/                  StageRunner, STAGE_CONFIGS, the stage handler factory, retry policy
     stage-events/            audit-log entity, event-bus fan-out, GET /orders/:id/stages and /stream
     status/                  recomputes orders.status from Postgres
@@ -276,11 +277,29 @@ public/js/                   the dashboard, plain ES modules, no bundler
 tools/load-generator/        HTTP-only traffic generator (pnpm load)
 ```
 
-Each feature folder owns its entity, and keeps its constants in `<feature>.constants.ts` and
-its types (interfaces, enums, SQL row shapes) in `<feature>.types.ts` — services, controllers
-and entities import them rather than declaring them. Entities are discovered by the `*.entity.ts` glob in
+Every feature has the same shape, so you can find a file by its role without reading the
+file list:
+
+```
+modules/<feature>/
+  <feature>.module.ts        the one file at the root: what the feature wires together
+  controllers/               HTTP entry points
+  services/                  injectable providers (the stage runner and its handler factory too)
+  helpers/                   pure functions, with their specs beside them
+  entities/                  TypeORM entities, classes suffixed Entity (OrderEntity, …)
+  types/                     <feature>.types.ts — interfaces, enums, SQL row shapes
+  consts/                    <feature>.constants.ts — tunables and lookup tables
+```
+
+A folder exists only when the feature has something to put in it (status is just `services/`).
+Services, controllers and entities import constants and types rather than declaring them.
+Entities are discovered by the `*.entity.ts` glob in
 `src/infrastructure/database/database-options.ts`, which both the app and the migrator use — a
-new entity needs the file suffix and a migration, nothing registered by hand.
+new entity needs the file suffix and a migration, nothing registered by hand. `orders` and
+`outbox` extend `BaseEntity` (`src/base/base-entity.ts`) for their uuid `id`, `created_at`,
+`updated_at` and soft-delete `deleted_at`. TypeORM stamps `updated_at` on its own writes; the
+status watcher's raw `UPDATE`s set it explicitly. `order_stage_events` (append-only, bigserial
+key) and `stage_retries` (composite key) declare their own columns.
 
 ```mermaid
 flowchart TD
@@ -312,14 +331,14 @@ A few rules hold this together:
   that caused it. `StageRunner.record()` is the only write into the audit log — claim, complete
   and fail all go through it, so the `ON CONFLICT DO NOTHING` idempotency rule exists in exactly
   one place.
-- **One frame shape.** `StageEventFrame` (`modules/stage-events/stage-events.types.ts`) is both
+- **One frame shape.** `StageEventFrame` (`modules/stage-events/types/stage-events.types.ts`) is both
   the event-bus payload and the SSE `data`.
 
 **Adding a stage** is an entry in `StageName` and `STAGES` (`src/shared/pipeline.ts`) plus a
-row in `STAGE_CONFIGS`. `stageHandler()` in `stage-handler.ts` builds a distinct provider class
+row in `STAGE_CONFIGS`. `stageHandler()` in `services/stage-handler.factory.ts` builds a distinct provider class
 per stage — it has to be a distinct class because `@OnEvent` metadata lives on the prototype
 and each stage's retry event differs. Everything else (claim, retry, dead-letter, publish) is
-shared in `stage-runner.ts`.
+shared in `services/stage-runner.service.ts`.
 
 On the dashboard side, `public/js/` is split into `format.js` (day.js timestamps, always in
 UTC), `dom.js` (node construction), `api.js` (fetch that rejects on non-2xx), `sidebar.js`

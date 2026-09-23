@@ -1,5 +1,5 @@
 import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
-import { DatabaseConfig } from '../../config';
+import { DatabaseConfig } from '@config';
 import { SOURCE_EXT } from './database.constants';
 
 

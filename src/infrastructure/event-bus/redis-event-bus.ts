@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
-import { eventBusConfig, EventBusConfig } from '../../config';
+import { eventBusConfig, EventBusConfig } from '@config';
 import { EventBus } from './event-bus';
 import { DEFAULT_PING_DEADLINE_MS } from './event-bus.constants';
 import { EventHandler } from './event-bus.types';

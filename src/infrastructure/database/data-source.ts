@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { databaseConfig } from '../../config';
+import { databaseConfig } from '@config';
 import { databaseOptions } from './database-options';
 import { SOURCE_EXT } from './database.constants';
 
