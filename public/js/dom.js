@@ -12,8 +12,7 @@ export function el(tag, className, text) {
 }
 
 export function badge(status) {
-  const span = el('span', `badge ${status}`, status);
-  return span;
+  return el('span', `badge ${status}`, status);
 }
 
 export const byId = (id) => document.getElementById(id);

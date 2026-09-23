@@ -17,5 +17,6 @@
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false
-  }
+  },
+  "exclude": ["node_modules", "dist", "tools"]
 }

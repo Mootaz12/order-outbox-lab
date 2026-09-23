@@ -1,20 +1,23 @@
-# Full dependency tree, used to compile TypeScript.
-FROM node:20-alpine AS build-deps
+# pnpm comes from corepack, pinned by the packageManager field in package.json.
+FROM node:20-alpine AS base
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+
+# Full dependency tree, used to compile TypeScript.
+FROM base AS build-deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Prod-only tree, shipped to the runtime image.
-FROM node:20-alpine AS runtime-deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund
+FROM base AS runtime-deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
 
-FROM node:20-alpine AS build
-WORKDIR /app
+FROM base AS build
 COPY --from=build-deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 FROM node:20-alpine AS runtime
 WORKDIR /app

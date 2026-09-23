@@ -46,7 +46,10 @@ a browser on `app1` see work done by `app2`.
 docker compose up --build -d
 curl -s localhost:8080/health | jq    # status ok, with postgres and redis both up
 
-# Generate traffic from the sibling repo, or:
+pnpm install
+pnpm load burst 50 10                   # 50 orders, 10 at a time — see Load generator
+
+# or a single order by hand:
 curl -s -X POST localhost:8080/orders -H 'content-type: application/json' \
   -d '{"customerName":"customer-1","amount":"42.50"}'
 ```
@@ -125,7 +128,8 @@ docker compose logs -f app1 app2 app3 | grep 'poller tick'
 payment, inventory and email run there. That's deliberate: work spreads across instances
 without each one doing the whole job. Stages have randomized delays (payment 700–1500ms,
 inventory 900–2000ms, email 400–1000ms) and different failure rates (10%, 15%, 5%), which
-is what makes interleaving and retries observable.
+is what makes interleaving and retries observable. Those numbers live in one table,
+`STAGE_CONFIGS` in `src/modules/stages/stage-config.ts`.
 
 **Durable retries.** A failing stage does three things in one transaction: appends its
 `failed` row, upserts `stage_retries`, and enqueues a *new outbox row tagged with its own
@@ -212,6 +216,13 @@ Postgres `LISTEN`/`NOTIFY` would do this without a fourth service. Redis was cho
 it's the general answer for cross-process fan-out and stays useful if this grows shared
 rate limits, locks or a stream consumer.
 
+Nothing outside `src/infrastructure/event-bus/` knows it is Redis. Consumers inject the
+abstract `EventBus` class (`publish` / `subscribe` / `ping`, payloads in and out as values),
+and `EventBusModule` binds it to `RedisEventBus` in one `useClass` line — that is the only
+thing to change for another driver. The one requirement a driver must meet is **broadcast**:
+every subscriber on every instance gets every message. A work-queue style transport that
+hands each message to one consumer would quietly bring back the two-thirds-silent problem.
+
 ## Schema
 
 Migrations only — `synchronize` is off. Three instances inferring a schema at boot would
@@ -220,7 +231,7 @@ race each other to `CREATE TABLE` the same objects, so schema creation is a one-
 
 ```mermaid
 flowchart TD
-    db[("db")] -->|service_healthy| migrator["migrator<br/>node dist/database/migrate.js"]
+    db[("db")] -->|service_healthy| migrator["migrator<br/>node dist/infrastructure/database/migrate.js"]
     db -->|service_healthy| app["app1 · app2 · app3"]
     redis[("redis")] -->|service_started| app
     migrator -->|service_completed_successfully| app
@@ -229,7 +240,7 @@ flowchart TD
 
 ```yaml
 migrator:
-  command: ["node", "dist/database/migrate.js"]
+  command: ["node", "dist/infrastructure/database/migrate.js"]
   depends_on:
     db: { condition: service_healthy }
   restart: "no"
@@ -242,52 +253,78 @@ migrator:
 actually passes, not merely until the container exists.
 
 Four tables: `orders`, `outbox`, `order_stage_events` (append-only, the read model), and
-`stage_retries`. See `src/database/migrations/` for the definitions.
+`stage_retries`. See `src/infrastructure/database/migrations/` for the definitions.
 
 ## Code layout
 
-```mermaid
-flowchart TD
-    pipeline["src/common/pipeline.ts<br/>StageName · StageStatus · OrderStatus<br/>StageRetryStatus · OrderEvent<br/>RedisChannel · stageEvent() · STAGES"]
-    env["src/common/env.ts<br/>every process.env read, with defaults"]
-
-    pipeline --> entities["src/entities"]
-    pipeline --> orders["src/orders"]
-    pipeline --> outbox["src/outbox"]
-    pipeline --> stages["src/stages"]
-    pipeline --> status["src/status"]
-    pipeline --> events["src/order-events"]
-    env --> outbox
-    env --> stages
-    env --> events
-    env --> entities
-
-    orders -->|"insert order + outbox row"| outbox
-    outbox -->|"emit order.created or stage.retry"| stages
-    stages -->|"append-only rows"| entities
-    stages -->|publish| events
-    events -->|SSE| dash["public/js"]
-    status -->|recompute| entities
+```
+src/
+  main.ts  app.module.ts     composition root: infrastructure, then feature modules
+  config/                    typed registerAs() namespaces: app, database, eventBus
+  shared/                    pipeline.ts (the vocabulary)
+  infrastructure/
+    database/                TypeORM options, DatabaseModule, migrator entrypoint, migrations
+    event-bus/               abstract EventBus + RedisEventBus driver (global)
+  modules/
+    orders/                  POST/GET /orders, GET /dead-letters, input parsing
+    outbox/                  Outbox entity, enqueueOutbox(), the SKIP LOCKED relay
+    stages/                  StageRunner, STAGE_CONFIGS, the stage handler factory, retry policy
+    stage-events/            audit-log entity, event-bus fan-out, GET /orders/:id/stages and /stream
+    status/                  recomputes orders.status from Postgres
+    health/                  Terminus: Postgres + event bus
+public/js/                   the dashboard, plain ES modules, no bundler
+tools/load-generator/        HTTP-only traffic generator (pnpm load)
 ```
 
-Two rules hold this together:
+Each feature folder owns its entity, and entities are discovered by the `*.entity.ts` glob in
+`src/infrastructure/database/database-options.ts`, which both the app and the migrator use — a
+new entity needs the file suffix and a migration, nothing registered by hand.
+
+```mermaid
+flowchart TD
+    orders["modules/orders"] -->|"enqueueOutbox() in the order's transaction"| outbox["modules/outbox"]
+    outbox -->|"emit order.created or &lt;stage&gt;.retry"| stages["modules/stages"]
+    stages -->|"enqueueOutbox() for a retry"| outbox
+    stages -->|"record() → order_stage_events"| events["modules/stage-events"]
+    stages -->|"publish after commit"| events
+    events -->|"EventBus stage_events → SSE"| dash["public/js"]
+    events -->|"settled frames"| status["modules/status"]
+    status -->|"recompute from Postgres"| db[("Postgres")]
+```
+
+A few rules hold this together:
 
 - **No string literals for anything the pipeline keys on.** Stage names, statuses, event
-  names and the Redis channel are enums in `src/common/pipeline.ts`, and `stageEvent()` is
+  names and the event-bus channel are enums in `src/shared/pipeline.ts`, and `stageEvent()` is
   the only place the `payment.retry` shape is assembled. `@OnEvent` decorators take those
   enum values directly, so a rename is a compile error rather than a silently
   unsubscribed stage. The same enums are bound as SQL parameters instead of being typed
   into the queries.
-- **Every environment read goes through `src/common/env.ts`.**
+- **Every environment read lives in a `registerAs()` factory in `src/config/`.** Consumers
+  inject a namespace with `@Inject(appConfig.KEY) app: AppConfig` (`AppConfig` is
+  `ConfigType<typeof appConfig>`), so config is typed at the point of use and a malformed value
+  like `PORT=abc` fails at boot. Code outside Nest's DI — the migrator — calls the factory
+  directly: `databaseConfig()`.
+- **One writer per table that matters.** `enqueueOutbox()` is the only insert into `outbox`
+  and always runs on the caller's transaction manager, so an outbox row commits with the change
+  that caused it. `StageRunner.record()` is the only write into the audit log — claim, complete
+  and fail all go through it, so the `ON CONFLICT DO NOTHING` idempotency rule exists in exactly
+  one place.
+- **One frame shape.** `StageEventFrame` (`modules/stage-events/stage-event-frame.ts`) is both
+  the event-bus payload and the SSE `data`.
 
-`StageRunner.record()` is the single write into the audit log — claim, complete and fail all
-go through it, so the `ON CONFLICT DO NOTHING` idempotency rule exists in exactly one place.
+**Adding a stage** is an entry in `StageName` and `STAGES` (`src/shared/pipeline.ts`) plus a
+row in `STAGE_CONFIGS`. `stageHandler()` in `stage-handler.ts` builds a distinct provider class
+per stage — it has to be a distinct class because `@OnEvent` metadata lives on the prototype
+and each stage's retry event differs. Everything else (claim, retry, dead-letter, publish) is
+shared in `stage-runner.ts`.
 
 On the dashboard side, `public/js/` is split into `format.js` (day.js timestamps, always in
-UTC), `dom.js` (node construction) and `api.js` (fetch that rejects on non-2xx). `dom.js`
-deliberately has no HTML-accepting path: `customerName` and stage `detail` are
-caller-supplied strings, and rendering them with `innerHTML` would let a name like
-`<img src=x onerror=...>` execute inside the dashboard.
+UTC), `dom.js` (node construction), `api.js` (fetch that rejects on non-2xx), `sidebar.js`
+(order list and dead letters), `timeline.js` (stage table rows) and `app.js` (selection:
+hydrate over REST, then subscribe over SSE). `dom.js` deliberately has no HTML-accepting path:
+`customerName` and stage `detail` are caller-supplied strings, and rendering them with
+`innerHTML` would let a name like `<img src=x onerror=...>` execute inside the dashboard.
 
 ## API
 
@@ -298,7 +335,7 @@ caller-supplied strings, and rendering them with `innerHTML` would let a name li
 | `GET /orders/:id/stages` | current stage rows from Postgres, for hydrating before subscribing |
 | `GET /orders/:id/stream` | SSE, `stage` events as they happen |
 | `GET /dead-letters` | `(order, stage)` pairs that exhausted their retries |
-| `GET /health` | Terminus check that pings Postgres **and** Redis |
+| `GET /health` | Terminus check that pings Postgres **and** the event bus (`eventBus` key) |
 
 Nginx adds `X-Served-By`, so you can see which instance answered:
 
@@ -321,41 +358,43 @@ SELECT order_id, stage, max(attempt) AS attempts,
   FROM order_stage_events GROUP BY 1,2 ORDER BY attempts DESC LIMIT 10;
 ```
 
-## Verification
+## Load generator
 
-`npm test` covers the pure retry policy and the event vocabulary. Everything that depends on
-real Postgres behaviour is checked against the running stack instead of mocked:
+`tools/load-generator` sends traffic at a running stack over HTTP only: it calls
+`POST /orders` and imports nothing from `src/`. It targets `TARGET_URL` (default
+`http://localhost:8080`, can be set in `.env`).
 
 ```bash
-./scripts/verify.sh
+pnpm load burst 50 10      # 50 orders, 10 concurrent — makes the pollers race for rows
+pnpm load steady 20 1000   # one order per second — easy to follow on the dashboard
 ```
 
-It asserts no stage ran the same attempt twice, nothing exceeded the retry cap, every order
-reached all three stages, `fulfilled` and `dead_lettered` never contradict each other, no
-order is left `pending` after the outbox drains, and dead-letters only ever appear at
-exactly the retry limit.
+Details: [tools/load-generator/README.md](tools/load-generator/README.md).
 
-The last run against this stack was 5,653 orders / 37,636 stage events / 22 dead letters, and
-all seven held. Two things only showed up at that volume and are worth knowing before you read
-the logs:
+## Testing
+
+`pnpm test` covers the pure pieces: the retry policy, the stage config table and the event
+vocabulary. Everything that depends on real Postgres behaviour — `SKIP LOCKED`, the unique-index
+claim, the status watcher — is only meaningful against the running stack. Two things only show
+up at volume and are worth knowing before you read the logs:
 
 - **`SKIP LOCKED` racing needs a burst.** Each poller runs on the same `@Interval(2000)` and
   they all started at boot, so the ticks are phase-locked. For one-at-a-time traffic instance-1
-  wins essentially every race; under a burst the lock contention is visible, and one tick there
-  claimed 40 rows on one instance while the others picked up the rest.
+  wins essentially every race; under a burst the lock contention is visible.
 - **The dead-letter path is the one branch a small run never reaches.** Three consecutive
-  failures on one stage is 0.15³ for inventory, so a 40-order run produced zero dead letters and
-  looked healthy. That is how the publish-before-commit bug below survived the first pass.
+  failures on one stage is 0.15³ for inventory, so a 40-order run produces zero dead letters and
+  looks healthy. That is how the publish-before-commit bug below survived the first pass. Use
+  `pnpm load burst 1000 25` when touching retry or status logic.
 
 ## Running locally without Docker
 
 ```bash
 docker compose up -d db redis migrator
 export DATABASE_URL=postgres://app:app@localhost:5432/orders REDIS_URL=redis://localhost:6379
-npm install && npm run build && npm run start:dev
+pnpm install && pnpm build && pnpm start:dev
 ```
 
-`npm run build` runs `npm run vendor` first, which copies `dayjs.min.js` plus the `utc` and
+`pnpm build` runs `pnpm run vendor` first, which copies `dayjs.min.js` plus the `utc` and
 `localizedFormat` plugins into `public/vendor/`. That directory is generated and gitignored;
 the dashboard loads them as plain scripts because the page has no bundler.
 
@@ -363,7 +402,7 @@ The plugins are not optional decoration. `LTS` is a *locale* token, and dayjs co
 resolves it once `localizedFormat` is loaded — without that plugin `format('LTS')` silently
 returns the literal string `"LTS"` and every timestamp column fills in with the word "LTS".
 `utc` is there because `order_stage_events.created_at` is `timestamptz`, so rendering it in
-the browser's own zone would shift the dashboard away from what `psql` and `verify.sh` print;
+the browser's own zone would shift the dashboard away from what `psql` prints;
 `format.js` pins UTC and the column header says so.
 
 ## Known limits
@@ -390,7 +429,7 @@ These are the honest edges of a first pass, not hidden bugs:
   correct it. Running 1000 orders left 3 orders stuck `pending` with a dead letter each;
   publishing after the commit is what closed it. A Redis outage still only costs a dashboard
   frame, because Postgres keeps the truth and a reload re-hydrates it — but `/health` now
-  reports Redis, so a silent stream is no longer invisible.
+  reports the event bus, so a silent stream is no longer invisible.
 - Failure is random by rate, not by dependency, so an order can fail payment and succeed on
-  retry. Real compensation would use the `payment.completed` / `payment.failed` events that
-  stages also emit — nothing consumes them yet.
+  retry. There is no compensation step: stages emit only their own `retry` event, and real
+  compensation would need `completed` / `failed` events for something to consume.

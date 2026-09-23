@@ -56,7 +56,7 @@ services:
   migrator:
     image: order-outbox-lab:dev
     build: .
-    command: ["node", "dist/database/migrate.js"]
+    command: ["node", "dist/infrastructure/database/migrate.js"]
     environment:
       <<: *app-env
     depends_on:
